@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Church Sales CRM</title>
+    <link rel="stylesheet" href="./assets/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__title">Church Sales CRM</div>
+        <div class="brand__subtitle">Firestore • GitHub Pages • Demo</div>
+      </div>
+
+      <div class="topbar__actions">
+        <div class="segmented" id="ownerQuickFilter" aria-label="Owner filter">
+          <button class="segmented__btn" data-owner="ALL" type="button">All</button>
+          <button class="segmented__btn" data-owner="Adrian" type="button">Adrian</button>
+          <button class="segmented__btn" data-owner="Carmen" type="button">Carmen</button>
+        </div>
+
+        <button class="btn btn--primary" id="newLeadBtn" type="button">+ New Lead</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="toolbar">
+        <nav class="tabs" aria-label="Main navigation">
+          <button class="tabs__tab is-active" data-view="pipeline" type="button">Pipeline</button>
+          <button class="tabs__tab" data-view="followups" type="button">Follow-ups</button>
+          <button class="tabs__tab" data-view="importexport" type="button">Import/Export</button>
+          <button class="tabs__tab" data-view="settings" type="button">Settings</button>
+        </nav>
+
+        <div class="toolbar__right">
+          <input id="searchInput" class="input" type="search" placeholder="Search church, city, notes…" />
+          <select id="stageFilter" class="select" aria-label="Stage filter"></select>
+        </div>
+      </section>
+
+      <section id="viewRoot"></section>
+    </main>
+
+    <!-- Lead Modal -->
+    <div class="modal" id="leadModal" aria-hidden="true">
+      <div class="modal__overlay" data-close="true"></div>
+      <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="leadModalTitle">
+        <div class="modal__header">
+          <div>
+            <div id="leadModalTitle" class="modal__title">Lead</div>
+            <div id="leadModalMeta" class="modal__meta"></div>
+          </div>
+          <button class="iconbtn" id="leadModalClose" type="button" aria-label="Close">✕</button>
+        </div>
+
+        <div class="modal__body" id="leadModalBody"></div>
+      </div>
+    </div>
+
+    <!-- Toasts -->
+    <div class="toasts" id="toasts"></div>
+
+    <script type="module" src="./assets/app.js"></script>
+  </body>
+</html>

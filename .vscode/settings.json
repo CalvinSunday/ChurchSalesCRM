@@ -1,0 +1,8 @@
+{
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "html.format.indentInnerHtml": true,
+  "liveServer.settings.port": 5500
+}

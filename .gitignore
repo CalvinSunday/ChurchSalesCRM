@@ -1,0 +1,11 @@
+# Node / tooling (not used, but safe)
+node_modules/
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Local data
+*.log

@@ -392,7 +392,7 @@ function cssEscape(s){
   return String(s).replaceAll("'", "\\'");
 }
 
-export function renderImportExport({ root, onImportCsv, onExportCsv }){
+export function renderImportExport({ root, onImportCsv, onExportCsv, onDownloadPrompt }){
   root.innerHTML = `
     <div class="panel">
       <div class="row">
@@ -405,6 +405,7 @@ export function renderImportExport({ root, onImportCsv, onExportCsv }){
           </div>
         </div>
         <div class="row__right">
+          <button class="btn" id="downloadPromptBtn" type="button">Download Lead Prompt</button>
           <button class="btn" id="exportBtn" type="button">Export CSV</button>
         </div>
       </div>
@@ -426,6 +427,7 @@ export function renderImportExport({ root, onImportCsv, onExportCsv }){
     </div>
   `;
 
+  root.querySelector("#downloadPromptBtn").addEventListener("click", onDownloadPrompt);
   root.querySelector("#exportBtn").addEventListener("click", onExportCsv);
 
   const fileEl = root.querySelector("#csvFile");

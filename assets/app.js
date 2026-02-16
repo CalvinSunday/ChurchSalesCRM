@@ -509,7 +509,8 @@ function render(){
     renderImportExport({
       root: els.viewRoot,
       onImportCsv: importCsvText,
-      onExportCsv: exportCsv
+      onExportCsv: exportCsv,
+      onDownloadPrompt: downloadLeadGenPrompt
     });
     return;
   }
@@ -1039,6 +1040,19 @@ function exportCsv(){
   }));
   const csv = leadsToCsv(leads);
   downloadText(`church-sales-crm-export-${new Date().toISOString().slice(0,10)}.csv`, csv);
+}
+
+async function downloadLeadGenPrompt(){
+  try{
+    const res = await fetch("./docs/chatgpt-lead-gen-prompt.md", { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    downloadText("chatgpt-lead-gen-prompt.md", text);
+    toast("Downloaded", "Lead generation prompt saved.");
+  }catch(err){
+    console.error(err);
+    toast("Download failed", "Could not fetch docs/chatgpt-lead-gen-prompt.md");
+  }
 }
 
 function initControls(){

@@ -134,6 +134,19 @@ const els = {
   tutorialNext: document.getElementById("tutorialNext")
 };
 
+function hasTutorialUi(){
+  return !!(
+    els.tutorialModal &&
+    els.tutorialClose &&
+    els.tutorialStepMeta &&
+    els.tutorialStepTitle &&
+    els.tutorialStepBody &&
+    els.tutorialPrev &&
+    els.tutorialSkip &&
+    els.tutorialNext
+  );
+}
+
 function applyTopControls(){
   // Tabs
   els.tabs.forEach(t => t.classList.toggle("is-active", t.dataset.view === state.view));
@@ -311,6 +324,7 @@ els.modal.addEventListener("click", (e) => {
 });
 
 function renderTutorialStep(){
+  if (!hasTutorialUi()) return;
   const step = TUTORIAL_STEPS[tutorialStepIndex];
   if (!step) return;
 
@@ -335,6 +349,10 @@ function renderTutorialStep(){
 }
 
 function openTutorial(startAt=0){
+  if (!hasTutorialUi()){
+    toast("Tutorial unavailable", "Reload the page to load the latest tutorial UI.");
+    return;
+  }
   tutorialStartingView = state.view;
   tutorialStepIndex = Math.max(0, Math.min(startAt, TUTORIAL_STEPS.length - 1));
   els.tutorialModal.classList.add("is-open");
@@ -343,6 +361,7 @@ function openTutorial(startAt=0){
 }
 
 function closeTutorial(){
+  if (!hasTutorialUi()) return;
   els.tutorialModal.classList.remove("is-open");
   els.tutorialModal.setAttribute("aria-hidden", "true");
 
@@ -352,28 +371,30 @@ function closeTutorial(){
   tutorialStartingView = null;
 }
 
-els.tutorialClose.addEventListener("click", closeTutorial);
-els.tutorialSkip.addEventListener("click", closeTutorial);
-els.tutorialModal.addEventListener("click", (e) => {
-  if (e.target?.dataset?.close === "true") closeTutorial();
-});
+if (hasTutorialUi()){
+  els.tutorialClose.addEventListener("click", closeTutorial);
+  els.tutorialSkip.addEventListener("click", closeTutorial);
+  els.tutorialModal.addEventListener("click", (e) => {
+    if (e.target?.dataset?.close === "true") closeTutorial();
+  });
 
-els.tutorialPrev.addEventListener("click", () => {
-  if (tutorialStepIndex <= 0) return;
-  tutorialStepIndex--;
-  renderTutorialStep();
-});
+  els.tutorialPrev.addEventListener("click", () => {
+    if (tutorialStepIndex <= 0) return;
+    tutorialStepIndex--;
+    renderTutorialStep();
+  });
 
-els.tutorialNext.addEventListener("click", () => {
-  const isLast = tutorialStepIndex >= TUTORIAL_STEPS.length - 1;
-  if (isLast){
-    closeTutorial();
-    toast("Tutorial complete", "You can replay it from the Tutorial button.");
-    return;
-  }
-  tutorialStepIndex++;
-  renderTutorialStep();
-});
+  els.tutorialNext.addEventListener("click", () => {
+    const isLast = tutorialStepIndex >= TUTORIAL_STEPS.length - 1;
+    if (isLast){
+      closeTutorial();
+      toast("Tutorial complete", "You can replay it from the Tutorial button.");
+      return;
+    }
+    tutorialStepIndex++;
+    renderTutorialStep();
+  });
+}
 
 async function openLeadModal(leadId){
   const lead = state.leadsById.get(leadId);

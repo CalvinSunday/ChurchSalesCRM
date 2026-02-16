@@ -309,7 +309,7 @@ a{color:inherit}
 .iconbtn:hover{background: rgba(255,255,255,.07)}
 
 /* Modal */
-.modal{position:fixed; inset:0; display:none}
+.modal{position:fixed; inset:0; display:none; z-index:40}
 .modal.is-open{display:block}
 .modal__overlay{
   position:absolute; inset:0;

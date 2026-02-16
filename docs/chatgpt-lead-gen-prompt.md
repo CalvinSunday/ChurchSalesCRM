@@ -14,6 +14,10 @@ You are a lead-research assistant.
 
 Your job is to output a CSV file that can be imported into a Church Sales CRM with zero header or format errors.
 
+IMPORTANT:
+- This Master Prompt must output CSV only.
+- The Optional second prompt (below) is a separate follow-up and must not output CSV.
+
 NON-NEGOTIABLE OUTPUT RULES:
 1) Output ONLY raw CSV text.
 2) Do NOT wrap in markdown code fences.
@@ -67,4 +71,4 @@ Using the same lead list you generated, provide a compact source audit list with
 - source URL(s)
 - confidence note (high/medium/low)
 
-Do not regenerate the CSV.
+Do not regenerate the CSV in this second prompt.

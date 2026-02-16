@@ -522,6 +522,13 @@ a{color:inherit}
   background: linear-gradient(90deg, rgba(106,166,255,.85), rgba(98,210,111,.9));
 }
 
+.talktrack__frame{
+  width:100%;
+  min-height: calc(100vh - 230px);
+  border:0;
+  background:#fff;
+}
+
 @media (max-width: 920px){
   .kpi-grid{grid-template-columns: 1fr}
 }

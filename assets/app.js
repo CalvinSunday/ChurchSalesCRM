@@ -1,6 +1,6 @@
 import { db, f } from "./firebase.js";
 import { STAGES, REMINDER_RULES, CSV_HEADER, KPI_DEFAULT_TARGETS, KPI_ACTIVITY_TO_METRIC } from "./constants.js";
-import { fillStageFilter, renderPipeline, renderFollowups, renderCalendar, renderKpis, renderImportExport, renderSettings, renderNewLeadForm, renderLeadModal, toast } from "./ui.js";
+import { fillStageFilter, renderPipeline, renderFollowups, renderCalendar, renderKpis, renderTalkTrack, renderImportExport, renderSettings, renderNewLeadForm, renderLeadModal, toast } from "./ui.js";
 import { parseCsv, validateHeader, leadsToCsv, downloadText } from "./csv.js";
 import { parseUSDateToDate, addDays, now, keyChurch, moneyToNumber } from "./utils.js";
 
@@ -357,6 +357,7 @@ function parseCalendarDoc(docSnap){
     availabilityType: data.availabilityType || "Available",
     notes: data.notes || "",
     startsOn: toDate(data.startsOn),
+    endsOn: toDate(data.endsOn),
     createdBy: data.createdBy || "",
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt)
@@ -469,15 +470,14 @@ function render(){
   }
 
   if (state.view === "calendar"){
-    const closedWonLeads = state.leads
-      .filter(l => l.stage === "Closed Won")
+    const leads = [...state.leads]
       .sort((a, b) => String(a.churchName || "").localeCompare(String(b.churchName || "")));
 
     renderCalendar({
       root: els.viewRoot,
       monthKey: state.calendarMonth,
       entries: state.calendarEntries,
-      closedWonLeads,
+      leads,
       onPrevMonth: () => shiftCalendarMonth(-1),
       onNextMonth: () => shiftCalendarMonth(1),
       onJumpToCurrentMonth: () => setCalendarMonth(new Date().toISOString().slice(0,7)),
@@ -501,6 +501,13 @@ function render(){
       onNextWeek: () => shiftKpiWeek(7),
       onCurrentWeek: () => setKpiWeek(weekStartKey(new Date())),
       onSaveTarget: saveKpiTarget
+    });
+    return;
+  }
+
+  if (state.view === "talktrack"){
+    renderTalkTrack({
+      root: els.viewRoot
     });
     return;
   }
@@ -610,41 +617,45 @@ function setCalendarMonth(monthKey){
 async function createCalendarEntry(form){
   try{
     const leadId = String(form.leadId || "").trim();
-    const date = String(form.date || "").trim();
+    const churchNameInput = String(form.churchName || "").trim();
+    const startDateText = String(form.startDate || "").trim();
+    const endDateText = String(form.endDate || "").trim();
     const availabilityType = String(form.availabilityType || "Available").trim() || "Available";
     const notes = String(form.notes || "").trim();
 
-    if (!leadId || !date){
-      toast("Missing fields", "Choose a closed client and a date.");
+    if (!startDateText || !endDateText){
+      toast("Missing fields", "Choose a start and end date.");
       return;
     }
 
     const lead = state.leadsById.get(leadId);
-    if (!lead || lead.stage !== "Closed Won"){
-      toast("Invalid client", "Availability can only be added for Closed Won clients.");
+    const startsOnRaw = new Date(`${startDateText}T12:00:00`);
+    const endsOnRaw = new Date(`${endDateText}T12:00:00`);
+
+    if (Number.isNaN(startsOnRaw.getTime()) || Number.isNaN(endsOnRaw.getTime())){
+      toast("Invalid date", "Please choose valid dates.");
       return;
     }
 
-    const startsOn = new Date(`${date}T12:00:00`);
-    if (Number.isNaN(startsOn.getTime())){
-      toast("Invalid date", "Please choose a valid date.");
-      return;
-    }
+    const startsOn = startsOnRaw <= endsOnRaw ? startsOnRaw : endsOnRaw;
+    const endsOn = startsOnRaw <= endsOnRaw ? endsOnRaw : startsOnRaw;
+    const churchName = churchNameInput || lead?.churchName || "Service Availability";
 
     await f.addDoc(f.collection(db, "calendarAvailability"), {
-      leadId,
-      churchName: lead.churchName || "",
-      owner: lead.owner || "",
+      leadId: lead?.id || "",
+      churchName,
+      owner: lead?.owner || state.userOwner,
       availabilityType,
       notes,
       startsOn: f.Timestamp.fromDate(startsOn),
+      endsOn: f.Timestamp.fromDate(endsOn),
       createdBy: state.userOwner,
       createdAt: f.serverTimestamp(),
       updatedAt: f.serverTimestamp()
     });
 
-    setCalendarMonth(date.slice(0, 7));
-    toast("Saved", "Availability added to master calendar.");
+    setCalendarMonth(startDateText.slice(0, 7));
+    toast("Saved", "Availability range added to calendar.");
   }catch(err){
     console.error(err);
     toast("Save failed", err?.message || String(err));
@@ -655,7 +666,7 @@ async function deleteCalendarEntry(entryId){
   const entry = state.calendarById.get(entryId);
   if (!entry) return;
 
-  const ok = confirm(`Delete availability for ${entry.churchName || "this client"}?`);
+  const ok = confirm(`Delete availability for ${entry.churchName || "this schedule block"}?`);
   if (!ok) return;
 
   try{
@@ -1047,15 +1058,16 @@ async function copyLeadGenPrompt(){
     const res = await fetch("./docs/chatgpt-lead-gen-prompt.md", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
+    const prompt = extractMasterPrompt(text);
 
     if (navigator.clipboard?.writeText){
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(prompt);
       toast("Copied", "Lead generation prompt copied to clipboard.");
       return;
     }
 
     const ta = document.createElement("textarea");
-    ta.value = text;
+    ta.value = prompt;
     ta.setAttribute("readonly", "true");
     ta.style.position = "fixed";
     ta.style.opacity = "0";
@@ -1070,6 +1082,13 @@ async function copyLeadGenPrompt(){
     console.error(err);
     toast("Copy failed", "Could not copy prompt. Open docs/chatgpt-lead-gen-prompt.md manually.");
   }
+}
+
+function extractMasterPrompt(markdown){
+  const text = String(markdown || "");
+  const m = text.match(/## Master Prompt \(copy\/paste\)\n\n([\s\S]*?)\n---\n\n## Optional second prompt/i);
+  if (m?.[1]) return m[1].trim();
+  return text.trim();
 }
 
 function initControls(){

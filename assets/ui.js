@@ -95,7 +95,7 @@ export function renderCalendar({
   root,
   monthKey,
   entries,
-  closedWonLeads,
+  leads,
   onPrevMonth,
   onNextMonth,
   onJumpToCurrentMonth,
@@ -113,16 +113,31 @@ export function renderCalendar({
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthLabel = monthDate.toLocaleString(undefined, { month: "long", year: "numeric" });
+  const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
+  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
 
   const entriesInMonth = entries
-    .filter(e => e.startsOn && e.startsOn.getFullYear() === year && e.startsOn.getMonth() === month)
+    .filter(e => {
+      if (!e.startsOn) return false;
+      const start = new Date(e.startsOn);
+      const end = new Date(e.endsOn || e.startsOn);
+      return start.getTime() <= monthEnd.getTime() && end.getTime() >= monthStart.getTime();
+    })
     .sort((a, b) => a.startsOn.getTime() - b.startsOn.getTime() || String(a.churchName || "").localeCompare(String(b.churchName || "")));
 
   const byDay = new Map();
   for (const e of entriesInMonth){
-    const day = e.startsOn.getDate();
-    if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push(e);
+    const start = new Date(e.startsOn);
+    const end = new Date(e.endsOn || e.startsOn);
+    const visibleStart = start < monthStart ? new Date(monthStart) : new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0, 0);
+    const visibleEnd = end > monthEnd ? new Date(monthEnd) : new Date(end.getFullYear(), end.getMonth(), end.getDate(), 12, 0, 0, 0);
+
+    for (let dayMs = visibleStart.getTime(); dayMs <= visibleEnd.getTime(); dayMs += 86400000){
+      const d = new Date(dayMs);
+      const day = d.getDate();
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day).push(e);
+    }
   }
 
   const dayHeaders = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
@@ -136,9 +151,9 @@ export function renderCalendar({
   for (let day = 1; day <= daysInMonth; day++){
     const dayEntries = byDay.get(day) || [];
     const chips = dayEntries.slice(0, 3).map(e => `
-      <button class="calendar__chip" type="button" data-open-lead="${escapeHtml(e.leadId || "")}" title="${escapeHtml(`${e.churchName || "Client"} • ${e.availabilityType || "Available"}`)}">
-        ${escapeHtml(e.churchName || "Client")}
-      </button>
+      ${e.leadId
+        ? `<button class="calendar__chip" type="button" data-open-lead="${escapeHtml(e.leadId || "")}" title="${escapeHtml(`${e.churchName || "Service Availability"} • ${e.availabilityType || "Available"}`)}">${escapeHtml(e.churchName || "Service Availability")}</button>`
+        : `<div class="calendar__chip" title="${escapeHtml(`${e.churchName || "Service Availability"} • ${e.availabilityType || "Available"}`)}">${escapeHtml(e.churchName || "Service Availability")}</div>`}
     `).join("");
     const overflow = dayEntries.length > 3 ? `<div class="calendar__more">+${dayEntries.length - 3} more</div>` : "";
     cells.push(`
@@ -166,7 +181,7 @@ export function renderCalendar({
         <div class="row" style="margin-bottom:10px;">
           <div class="row__left">
             <div class="h2" style="margin:0;">Master Availability Calendar</div>
-            <div style="color:var(--muted); font-size:13px;">Shared live across all users</div>
+            <div style="color:var(--muted); font-size:13px;">Shared internal schedule for your sales team</div>
           </div>
           <div class="row__right">
             <button class="btn" id="calendarPrevBtn" type="button">←</button>
@@ -183,34 +198,42 @@ export function renderCalendar({
       </div>
 
       <div class="panel">
-        <div class="h2">Add Availability (Closed Clients)</div>
+        <div class="h2">Add Availability Range</div>
         <form id="calendarForm" class="form" style="grid-template-columns: 1fr;">
           <div class="field">
-            <label>Client (Closed Won) *</label>
-            <select name="leadId" required ${closedWonLeads.length ? "" : "disabled"}>
-              ${closedWonLeads.length
-                ? closedWonLeads.map(l => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.churchName || "Unnamed")} (${escapeHtml(l.city || "")}${l.city && l.state ? ", " : ""}${escapeHtml(l.state || "")})</option>`).join("")
-                : `<option value="">No Closed Won clients available</option>`}
+            <label>Church name (optional)</label>
+            <input name="churchName" placeholder="These dates are available for us to service your church" />
+          </div>
+          <div class="field">
+            <label>Linked lead (optional)</label>
+            <select name="leadId">
+              <option value="">Not linked to a lead</option>
+              ${leads.map(l => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.churchName || "Unnamed")} (${escapeHtml(l.city || "")}${l.city && l.state ? ", " : ""}${escapeHtml(l.state || "")})</option>`).join("")}
             </select>
           </div>
           <div class="field">
-            <label>Date *</label>
-            <input name="date" type="date" value="${escapeHtml(defaultDate)}" required />
+            <label>Start date *</label>
+            <input name="startDate" type="date" value="${escapeHtml(defaultDate)}" required />
+          </div>
+          <div class="field">
+            <label>End date *</label>
+            <input name="endDate" type="date" value="${escapeHtml(defaultDate)}" required />
           </div>
           <div class="field">
             <label>Availability</label>
             <select name="availabilityType">
               <option value="Available">Available</option>
+              <option value="Partially Available">Partially Available</option>
               <option value="Booked">Booked</option>
               <option value="Unavailable">Unavailable</option>
             </select>
           </div>
           <div class="field">
             <label>Notes</label>
-            <textarea name="notes" placeholder="Install date confirmed, team unavailable, etc."></textarea>
+            <textarea name="notes" placeholder="Internal note: crew availability, travel windows, blackout dates, etc."></textarea>
           </div>
           <div class="field">
-            <button class="btn btn--primary" type="submit" ${closedWonLeads.length ? "" : "disabled"}>Save availability</button>
+            <button class="btn btn--primary" type="submit">Save date range</button>
           </div>
         </form>
 
@@ -221,14 +244,14 @@ export function renderCalendar({
             ? entriesInMonth.map(e => `
               <div class="calendar-item">
                 <div>
-                  <div class="calendar-item__title">${escapeHtml(e.churchName || "Client")}</div>
+                  <div class="calendar-item__title">${escapeHtml(e.churchName || "Service Availability")}</div>
                   <div class="calendar-item__meta">
-                    ${escapeHtml(formatUSDate(e.startsOn))} • <span class="calendar-badge ${calendarTypeClass(e.availabilityType)}">${escapeHtml(e.availabilityType || "Available")}</span>
+                    ${escapeHtml(formatUSDate(e.startsOn))} → ${escapeHtml(formatUSDate(e.endsOn || e.startsOn))} • <span class="calendar-badge ${calendarTypeClass(e.availabilityType)}">${escapeHtml(e.availabilityType || "Available")}</span>
                   </div>
                   ${e.notes ? `<div class="calendar-item__notes">${escapeHtml(e.notes)}</div>` : ""}
                 </div>
                 <div class="row__right">
-                  <button class="btn" type="button" data-open-lead="${escapeHtml(e.leadId || "")}">Lead</button>
+                  ${e.leadId ? `<button class="btn" type="button" data-open-lead="${escapeHtml(e.leadId || "")}">Lead</button>` : ""}
                   <button class="btn btn--danger" type="button" data-delete-calendar="${escapeHtml(e.id)}">Delete</button>
                 </div>
               </div>
@@ -324,6 +347,20 @@ export function renderKpis({
       });
     });
   });
+}
+
+export function renderTalkTrack({ root }){
+  root.innerHTML = `
+    <div class="panel" style="padding:0; overflow:hidden;">
+      <iframe
+        class="talktrack__frame"
+        src="./docs/talk-track.html"
+        title="Church Cold Call Talk Track"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+      ></iframe>
+    </div>
+  `;
 }
 
 function renderKpiOwnerCard(owner, target, total){

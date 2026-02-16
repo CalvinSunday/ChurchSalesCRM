@@ -22,7 +22,9 @@ NON-NEGOTIABLE OUTPUT RULES:
 church_name,website,has_livestream,livestream_url,city,state,contact_name,contact_role,phone,email,owner,stage,next_followup_date,notes,tier_interest,estimated_gear_budget
 
 FIELD RULES:
-- owner must be either Adrian or Carmen (alternate assignment row by row).
+- owner must be either Adrian or Carmen only.
+- assign owners alternating by row: row 1 Adrian, row 2 Carmen, row 3 Adrian, row 4 Carmen, etc.
+- keep owner split as even as possible across all rows.
 - stage must be Lead for every row.
 - has_livestream must be exactly one of: yes,no,unknown
 - livestream_url should be blank if has_livestream is no or unknown.

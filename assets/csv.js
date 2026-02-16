@@ -71,6 +71,8 @@ export function leadsToCsv(leads){
     const row = [
       lead.churchName || "",
       lead.website || "",
+      lead.livestreamStatus || "unknown",
+      lead.livestreamUrl || "",
       lead.city || "",
       lead.state || "",
       lead.contactName || "",

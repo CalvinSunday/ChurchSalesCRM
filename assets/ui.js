@@ -269,6 +269,129 @@ export function renderCalendar({
   });
 }
 
+export function renderKpis({
+  root,
+  owners,
+  targets,
+  totals,
+  weekStart,
+  weekEnd,
+  onPrevWeek,
+  onNextWeek,
+  onCurrentWeek,
+  onSaveTarget
+}){
+  const startText = formatUSDate(weekStart);
+  const endText = formatUSDate(weekEnd);
+
+  root.innerHTML = `
+    <div class="panel" style="margin-bottom:12px;">
+      <div class="row">
+        <div class="row__left">
+          <div>
+            <div class="h2" style="margin-bottom:6px;">Weekly KPI Tracking</div>
+            <div style="color:var(--muted); font-size:13px;">Live shared counters from logged activities (${escapeHtml(startText)} – ${escapeHtml(endText)})</div>
+          </div>
+        </div>
+        <div class="row__right">
+          <button class="btn" id="kpiPrevWeek" type="button">← Prev week</button>
+          <button class="btn" id="kpiCurrentWeek" type="button">Current week</button>
+          <button class="btn" id="kpiNextWeek" type="button">Next week →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid kpi-grid">
+      ${owners.map(owner => renderKpiOwnerCard(owner, targets?.[owner] || {}, totals?.[owner] || {})).join("")}
+    </div>
+  `;
+
+  root.querySelector("#kpiPrevWeek").addEventListener("click", onPrevWeek);
+  root.querySelector("#kpiNextWeek").addEventListener("click", onNextWeek);
+  root.querySelector("#kpiCurrentWeek").addEventListener("click", onCurrentWeek);
+
+  owners.forEach((owner) => {
+    const form = root.querySelector(`[data-kpi-form='${cssEscape(owner)}']`);
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.currentTarget);
+      await onSaveTarget({
+        owner,
+        calls: fd.get("calls"),
+        emails: fd.get("emails"),
+        messages: fd.get("messages")
+      });
+    });
+  });
+}
+
+function renderKpiOwnerCard(owner, target, total){
+  const callsDone = Number(total.calls || 0);
+  const emailsDone = Number(total.emails || 0);
+  const messagesDone = Number(total.messages || 0);
+
+  const callsTarget = Number(target.calls || 0);
+  const emailsTarget = Number(target.emails || 0);
+  const messagesTarget = Number(target.messages || 0);
+
+  return `
+    <div class="panel">
+      <div class="row" style="margin-bottom:10px;">
+        <div class="row__left">
+          <div class="h2" style="margin:0;">${escapeHtml(owner)}</div>
+        </div>
+      </div>
+
+      <div class="kpi-metrics">
+        ${renderKpiMetricRow("Calls", callsDone, callsTarget)}
+        ${renderKpiMetricRow("Emails", emailsDone, emailsTarget)}
+        ${renderKpiMetricRow("DMs / Texts", messagesDone, messagesTarget)}
+      </div>
+
+      <div style="height:12px;"></div>
+
+      <form class="form" style="grid-template-columns: repeat(3, minmax(0,1fr));" data-kpi-form="${escapeHtml(owner)}">
+        <div class="field">
+          <label>Calls target</label>
+          <input name="calls" inputmode="numeric" value="${escapeHtml(String(callsTarget))}" />
+        </div>
+        <div class="field">
+          <label>Emails target</label>
+          <input name="emails" inputmode="numeric" value="${escapeHtml(String(emailsTarget))}" />
+        </div>
+        <div class="field">
+          <label>DM/Text target</label>
+          <input name="messages" inputmode="numeric" value="${escapeHtml(String(messagesTarget))}" />
+        </div>
+        <div class="field field--span2">
+          <button class="btn btn--primary" type="submit">Save ${escapeHtml(owner)} targets</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function renderKpiMetricRow(label, done, target){
+  const pct = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0;
+  const doneText = `${done} / ${target}`;
+  return `
+    <div class="kpi-row">
+      <div class="kpi-row__top">
+        <div class="kpi-row__label">${escapeHtml(label)}</div>
+        <div class="kpi-row__value">${escapeHtml(doneText)} (${pct}%)</div>
+      </div>
+      <div class="kpi-bar">
+        <div class="kpi-bar__fill" style="width:${pct}%;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function cssEscape(s){
+  return String(s).replaceAll("'", "\\'");
+}
+
 export function renderImportExport({ root, onImportCsv, onExportCsv }){
   root.innerHTML = `
     <div class="panel">
@@ -383,6 +506,19 @@ export function renderNewLeadForm({ root, defaults, onSubmit, onCancel }){
         </div>
 
         <div class="field">
+          <label>Has livestream?</label>
+          <select name="livestreamStatus">
+            <option value="unknown" selected>Unknown</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Livestream link</label>
+          <input name="livestreamUrl" placeholder="https://youtube.com/..." />
+        </div>
+
+        <div class="field">
           <label>City *</label>
           <input name="city" required />
         </div>
@@ -480,8 +616,14 @@ export function renderLeadModal({ lead, activities, onUpdateLead, onAddActivity,
   const contactDetails = [
     lead.phone ? `📞 ${escapeHtml(lead.phone)}` : "",
     lead.email ? `✉️ ${escapeHtml(lead.email)}` : "",
-    lead.website ? `🌐 <a href="${escapeHtml(lead.website)}" target="_blank" rel="noreferrer">${escapeHtml(lead.website)}</a>` : ""
+    lead.website ? `🌐 <a href="${escapeHtml(lead.website)}" target="_blank" rel="noreferrer">${escapeHtml(lead.website)}</a>` : "",
+    lead.livestreamUrl ? `📺 <a href="${escapeHtml(lead.livestreamUrl)}" target="_blank" rel="noreferrer">${escapeHtml(lead.livestreamUrl)}</a>` : ""
   ].filter(Boolean).join("<br/>");
+
+  const livestreamStatusLabel =
+    lead.livestreamStatus === "yes" ? "Yes"
+      : lead.livestreamStatus === "no" ? "No"
+        : "Unknown";
 
   const activityHtml = activities.length
     ? `<div class="timeline">${activities.map(a => `
@@ -544,6 +686,20 @@ export function renderLeadModal({ lead, activities, onUpdateLead, onAddActivity,
           <input id="leadGearBudget" value="${escapeHtml(lead.estimatedGearBudget ?? "")}" inputmode="numeric" placeholder="4000" />
         </div>
 
+        <div class="field">
+          <label>Has livestream?</label>
+          <select id="leadLivestreamStatus">
+            <option value="unknown" ${lead.livestreamStatus !== "yes" && lead.livestreamStatus !== "no" ? "selected" : ""}>Unknown</option>
+            <option value="yes" ${lead.livestreamStatus === "yes" ? "selected" : ""}>Yes</option>
+            <option value="no" ${lead.livestreamStatus === "no" ? "selected" : ""}>No</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Livestream link</label>
+          <input id="leadLivestreamUrl" value="${escapeHtml(lead.livestreamUrl || "")}" placeholder="https://youtube.com/..." />
+        </div>
+
         <div class="field field--span2">
           <label>Notes</label>
           <textarea id="leadNotes" placeholder="Notes…">${escapeHtml(lead.notes || "")}</textarea>
@@ -553,6 +709,7 @@ export function renderLeadModal({ lead, activities, onUpdateLead, onAddActivity,
           <label>Contact</label>
           <div style="color:var(--muted); font-size:13px; line-height:1.5;">
             ${contactLine ? `<div style="color:var(--text); font-weight:800; margin-bottom:6px;">${contactLine}</div>` : ""}
+            <div style="margin-bottom:6px;">Livestream: <b style="color:var(--text);">${escapeHtml(livestreamStatusLabel)}</b></div>
             ${contactDetails || "—"}
           </div>
         </div>
@@ -650,6 +807,11 @@ export function renderCard(lead, opts={}){
     ? `${lead.lastActivityType}${lead.lastActivityAt ? ` • ${formatUSDate(lead.lastActivityAt)}` : ""}`
     : "No activity";
 
+  const livestreamLabel =
+    lead.livestreamStatus === "yes" ? "Yes"
+      : lead.livestreamStatus === "no" ? "No"
+        : "Unknown";
+
   return `
     <div class="card" data-open-lead="${escapeHtml(lead.id)}">
       <div class="card__top">
@@ -665,6 +827,7 @@ export function renderCard(lead, opts={}){
       <div class="card__meta">
         <div class="kv">Stage: <b>${escapeHtml(lead.stage || "Lead")}</b></div>
         <div class="kv">Next: <b>${escapeHtml(lead.nextFollowUpAt ? formatUSDate(lead.nextFollowUpAt) : "—")}</b></div>
+        <div class="kv">Live: <b>${escapeHtml(livestreamLabel)}</b></div>
         <div class="kv">Last: <b>${escapeHtml(last)}</b></div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import {
   deleteDoc,
   getDoc,
   getDocs,
+  collectionGroup,
   query,
   orderBy,
   where,
@@ -33,5 +34,6 @@ export const db = getFirestore(app);
 
 export const f = {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
+  collectionGroup,
   query, orderBy, where, limit, onSnapshot, serverTimestamp, Timestamp
 };

@@ -1,3 +1,3 @@
-church_name,website,city,state,contact_name,contact_role,phone,email,owner,stage,next_followup_date,notes,tier_interest,estimated_gear_budget
-Example Community Church,https://examplechurch.org,Seattle,WA,,Worship Pastor,555-555-5555,info@examplechurch.org,Adrian,Lead,02/08/2026,"Found via website; has livestream on YouTube",5000,4000
-River Valley Church,https://rivervalley.example,Portland,OR,,,,,Carmen,Email Sent,02/08/2026,"Needs livestream audio cleanup; volunteers",10000,5000
+church_name,website,has_livestream,livestream_url,city,state,contact_name,contact_role,phone,email,owner,stage,next_followup_date,notes,tier_interest,estimated_gear_budget
+Example Community Church,https://examplechurch.org,yes,https://youtube.com/examplechurch,Seattle,WA,,Worship Pastor,555-555-5555,info@examplechurch.org,Adrian,Lead,02/08/2026,"Found via website; has livestream on YouTube",5000,4000
+River Valley Church,https://rivervalley.example,no,,Portland,OR,,,,,Carmen,Email Sent,02/08/2026,"Needs livestream audio cleanup; volunteers",10000,5000

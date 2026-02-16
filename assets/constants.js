@@ -41,6 +41,8 @@ export const REMINDER_RULES = {
 export const CSV_HEADER = [
   "church_name",
   "website",
+  "has_livestream",
+  "livestream_url",
   "city",
   "state",
   "contact_name",
@@ -54,3 +56,16 @@ export const CSV_HEADER = [
   "tier_interest",
   "estimated_gear_budget"
 ];
+
+export const KPI_DEFAULT_TARGETS = {
+  Adrian: { calls: 150, emails: 90, messages: 50 },
+  Carmen: { calls: 150, emails: 90, messages: 50 }
+};
+
+export const KPI_ACTIVITY_TO_METRIC = {
+  "Call Attempted": "calls",
+  "Call Connected": "calls",
+  "Voicemail Left": "calls",
+  "Email Sent": "emails",
+  "Text/SMS": "messages"
+};

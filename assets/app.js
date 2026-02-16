@@ -1,6 +1,6 @@
 import { db, f } from "./firebase.js";
-import { STAGES, REMINDER_RULES, CSV_HEADER } from "./constants.js";
-import { fillStageFilter, renderPipeline, renderFollowups, renderCalendar, renderImportExport, renderSettings, renderNewLeadForm, renderLeadModal, toast } from "./ui.js";
+import { STAGES, REMINDER_RULES, CSV_HEADER, KPI_DEFAULT_TARGETS, KPI_ACTIVITY_TO_METRIC } from "./constants.js";
+import { fillStageFilter, renderPipeline, renderFollowups, renderCalendar, renderKpis, renderImportExport, renderSettings, renderNewLeadForm, renderLeadModal, toast } from "./ui.js";
 import { parseCsv, validateHeader, leadsToCsv, downloadText } from "./csv.js";
 import { parseUSDateToDate, addDays, now, keyChurch, moneyToNumber } from "./utils.js";
 
@@ -10,8 +10,11 @@ const LS = {
   view: "crm:view",
   stageFilter: "crm:stageFilter",
   search: "crm:search",
-  calendarMonth: "crm:calendarMonth"
+  calendarMonth: "crm:calendarMonth",
+  kpiWeekStart: "crm:kpiWeekStart"
 };
+
+const KPI_OWNERS = ["Adrian", "Carmen"];
 
 function getLocal(key, fallback=null){
   try{
@@ -30,13 +33,79 @@ const state = {
   stageFilter: getLocal(LS.stageFilter, "ALL"),
   search: getLocal(LS.search, ""),
   calendarMonth: getLocal(LS.calendarMonth, new Date().toISOString().slice(0,7)),
+  kpiWeekStart: getLocal(LS.kpiWeekStart, weekStartKey(new Date())),
   leads: [],
   leadsById: new Map(),
   calendarEntries: [],
   calendarById: new Map(),
+  activities: [],
+  kpiTargets: {
+    Adrian: { ...KPI_DEFAULT_TARGETS.Adrian },
+    Carmen: { ...KPI_DEFAULT_TARGETS.Carmen }
+  },
   unsubscribe: null,
-  unsubscribeCalendar: null
+  unsubscribeCalendar: null,
+  unsubscribeActivities: null,
+  unsubscribeKpiTargets: null
 };
+
+function weekStartDate(d){
+  const date = new Date(d);
+  date.setHours(0,0,0,0);
+  const dow = date.getDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  date.setDate(date.getDate() + offset);
+  return date;
+}
+
+function weekStartKey(d){
+  const date = weekStartDate(d);
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function parseISODateAtNoon(yyyyMmDd){
+  const m = String(yyyyMmDd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function getActivityOwner(activity){
+  if (activity.owner) return activity.owner;
+  if (!activity.leadId) return "";
+  const lead = state.leadsById.get(activity.leadId);
+  return lead?.owner || "";
+}
+
+function computeWeeklyKpis(weekStartStr){
+  const start = parseISODateAtNoon(weekStartStr) || weekStartDate(new Date());
+  start.setHours(0,0,0,0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+
+  const totals = {
+    Adrian: { calls: 0, emails: 0, messages: 0 },
+    Carmen: { calls: 0, emails: 0, messages: 0 }
+  };
+
+  for (const activity of state.activities){
+    const metric = KPI_ACTIVITY_TO_METRIC[activity.type] || null;
+    if (!metric) continue;
+
+    const owner = getActivityOwner(activity);
+    if (!totals[owner]) continue;
+
+    const happenedAt = activity.happenedAt || activity.createdAt;
+    if (!happenedAt) continue;
+
+    const ms = happenedAt.getTime();
+    if (ms < start.getTime() || ms >= end.getTime()) continue;
+
+    totals[owner][metric] += 1;
+  }
+
+  return { totals, start, end: new Date(end.getTime() - 1) };
+}
 
 const TUTORIAL_STEPS = [
   {
@@ -44,7 +113,7 @@ const TUTORIAL_STEPS = [
     view: "pipeline",
     bullets: [
       "This quick walkthrough covers every main workflow in the app.",
-      "Use the tabs to switch between Pipeline, Follow-ups, Calendar, Import/Export, and Settings.",
+      "Use the tabs to switch between Pipeline, Follow-ups, Calendar, KPIs, Import/Export, and Settings.",
       "Use the Tutorial button in the top bar any time to replay this guide."
     ]
   },
@@ -91,6 +160,15 @@ const TUTORIAL_STEPS = [
       "Calendar is a shared live view across all users.",
       "Add availability only for Closed Won clients so the whole team sees scheduling status.",
       "Use month navigation to plan upcoming client availability and booking load."
+    ]
+  },
+  {
+    title: "KPI Tracking",
+    view: "kpis",
+    bullets: [
+      "KPIs track weekly activity targets for Adrian and Carmen.",
+      "Calls, emails, and DM/text totals update live from logged lead activities.",
+      "Targets can be updated and are shared for all users in the app."
     ]
   },
   {
@@ -197,6 +275,13 @@ function setSearch(s){
   render();
 }
 
+function normalizeLivestreamStatus(value){
+  const s = String(value || "").trim().toLowerCase();
+  if (["yes", "y", "true", "1"].includes(s)) return "yes";
+  if (["no", "n", "false", "0"].includes(s)) return "no";
+  return "unknown";
+}
+
 function leadMatchesFilters(lead){
   if (state.quickOwner !== "ALL" && lead.owner !== state.quickOwner) return false;
   if (state.stageFilter !== "ALL" && lead.stage !== state.stageFilter) return false;
@@ -204,7 +289,7 @@ function leadMatchesFilters(lead){
   const q = state.search.trim().toLowerCase();
   if (!q) return true;
   const hay = [
-    lead.churchName, lead.city, lead.state, lead.notes, lead.website, lead.email, lead.phone, lead.contactName, lead.contactRole
+    lead.churchName, lead.city, lead.state, lead.notes, lead.website, lead.email, lead.phone, lead.contactName, lead.contactRole, lead.livestreamUrl, lead.livestreamStatus
   ].filter(Boolean).join(" ").toLowerCase();
   return hay.includes(q);
 }
@@ -216,6 +301,8 @@ function parseLeadDoc(docSnap){
     id: docSnap.id,
     churchName: data.churchName || "",
     website: data.website || "",
+    livestreamStatus: normalizeLivestreamStatus(data.livestreamStatus),
+    livestreamUrl: data.livestreamUrl || "",
     city: data.city || "",
     state: data.state || "",
     contactName: data.contactName || "",
@@ -295,6 +382,69 @@ function subscribeCalendar(){
   });
 }
 
+function parseActivityDoc(docSnap){
+  const data = docSnap.data() || {};
+  const toDate = (ts) => ts && typeof ts.toDate === "function" ? ts.toDate() : null;
+  const leadId = docSnap.ref?.parent?.parent?.id || "";
+
+  return {
+    id: docSnap.id,
+    leadId,
+    owner: data.owner || "",
+    type: data.type || "",
+    notes: data.notes || "",
+    happenedAt: toDate(data.happenedAt),
+    createdAt: toDate(data.createdAt)
+  };
+}
+
+function subscribeActivities(){
+  if (state.unsubscribeActivities) state.unsubscribeActivities();
+
+  const q = f.collectionGroup(db, "activities");
+  state.unsubscribeActivities = f.onSnapshot(q, (snap) => {
+    const activities = [];
+    for (const d of snap.docs){
+      activities.push(parseActivityDoc(d));
+    }
+    state.activities = activities;
+    if (state.view === "kpis") render();
+  }, (err) => {
+    console.error(err);
+    toast("KPI activity error", err?.message || String(err));
+  });
+}
+
+function subscribeKpiTargets(){
+  if (state.unsubscribeKpiTargets) state.unsubscribeKpiTargets();
+
+  const col = f.collection(db, "kpiTargets");
+  state.unsubscribeKpiTargets = f.onSnapshot(col, (snap) => {
+    const next = {
+      Adrian: { ...KPI_DEFAULT_TARGETS.Adrian },
+      Carmen: { ...KPI_DEFAULT_TARGETS.Carmen }
+    };
+
+    for (const d of snap.docs){
+      const owner = d.id;
+      if (!next[owner]) continue;
+      const data = d.data() || {};
+      const calls = Number(data.calls);
+      const emails = Number(data.emails);
+      const messages = Number(data.messages);
+      if (Number.isFinite(calls) && calls >= 0) next[owner].calls = calls;
+      if (Number.isFinite(emails) && emails >= 0) next[owner].emails = emails;
+      if (Number.isFinite(messages) && messages >= 0) next[owner].messages = messages;
+    }
+
+    state.kpiTargets = next;
+    if (state.view === "kpis") render();
+  }, (err) => {
+    console.error(err);
+    toast("KPI target error", err?.message || String(err));
+  });
+}
+
 function render(){
   applyTopControls();
   const filtered = state.leads.filter(leadMatchesFilters);
@@ -338,6 +488,23 @@ function render(){
     return;
   }
 
+  if (state.view === "kpis"){
+    const metrics = computeWeeklyKpis(state.kpiWeekStart);
+    renderKpis({
+      root: els.viewRoot,
+      owners: KPI_OWNERS,
+      targets: state.kpiTargets,
+      totals: metrics.totals,
+      weekStart: metrics.start,
+      weekEnd: metrics.end,
+      onPrevWeek: () => shiftKpiWeek(-7),
+      onNextWeek: () => shiftKpiWeek(7),
+      onCurrentWeek: () => setKpiWeek(weekStartKey(new Date())),
+      onSaveTarget: saveKpiTarget
+    });
+    return;
+  }
+
   if (state.view === "importexport"){
     renderImportExport({
       root: els.viewRoot,
@@ -377,6 +544,52 @@ function render(){
   }
 
   els.viewRoot.innerHTML = `<div class="panel">Unknown view.</div>`;
+}
+
+function shiftKpiWeek(days){
+  const start = parseISODateAtNoon(state.kpiWeekStart) || weekStartDate(new Date());
+  start.setDate(start.getDate() + days);
+  setKpiWeek(weekStartKey(start));
+}
+
+function setKpiWeek(weekStartStr){
+  if (!parseISODateAtNoon(weekStartStr)) return;
+  state.kpiWeekStart = weekStartStr;
+  setLocal(LS.kpiWeekStart, weekStartStr);
+  render();
+}
+
+async function saveKpiTarget({ owner, calls, emails, messages }){
+  try{
+    if (!KPI_OWNERS.includes(owner)) return;
+
+    const toNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+    };
+
+    const payload = {
+      calls: toNum(calls),
+      emails: toNum(emails),
+      messages: toNum(messages)
+    };
+
+    if (payload.calls === null || payload.emails === null || payload.messages === null){
+      toast("Invalid target", "Use whole numbers 0 or higher.");
+      return;
+    }
+
+    await f.setDoc(f.doc(db, "kpiTargets", owner), {
+      ...payload,
+      updatedAt: f.serverTimestamp(),
+      updatedBy: state.userOwner
+    }, { merge: true });
+
+    toast("Saved", `${owner} KPI targets updated.`);
+  }catch(err){
+    console.error(err);
+    toast("Save failed", err?.message || String(err));
+  }
 }
 
 function shiftCalendarMonth(delta){
@@ -570,6 +783,8 @@ async function openLeadModal(leadId){
       const tierInterest = els.modalBody.querySelector("#leadTierInterest").value;
       const gearBudget = els.modalBody.querySelector("#leadGearBudget").value;
       const notes = els.modalBody.querySelector("#leadNotes").value;
+      const livestreamStatus = normalizeLivestreamStatus(els.modalBody.querySelector("#leadLivestreamStatus").value);
+      const livestreamUrl = els.modalBody.querySelector("#leadLivestreamUrl").value.trim();
 
       const depositPaid = els.modalBody.querySelector("#depositPaid").value === "yes";
       const depositAmount = moneyToNumber(els.modalBody.querySelector("#depositAmount").value);
@@ -582,6 +797,8 @@ async function openLeadModal(leadId){
         tierInterest: tierInterest || "",
         estimatedGearBudget: gearBudget || "",
         notes: notes || "",
+        livestreamStatus,
+        livestreamUrl: livestreamUrl || "",
         nextFollowUpAt: nextD ? f.Timestamp.fromDate(nextD) : null,
         depositPaid,
         depositAmount: depositAmount ?? "",
@@ -663,10 +880,12 @@ async function fetchActivities(leadId){
 }
 
 async function addActivity(leadId, { type, notes, happenedAt }){
+  const lead = state.leadsById.get(leadId);
   const actCol = f.collection(db, "leads", leadId, "activities");
   const happened = happenedAt ? f.Timestamp.fromDate(happenedAt) : f.serverTimestamp();
 
   await f.addDoc(actCol, {
+    owner: lead?.owner || "",
     type,
     notes: notes || "",
     happenedAt: happened,
@@ -718,6 +937,8 @@ async function createLeadFromForm(form){
     const payload = {
       churchName,
       website: String(form.website || "").trim(),
+      livestreamStatus: normalizeLivestreamStatus(form.livestreamStatus),
+      livestreamUrl: String(form.livestreamUrl || "").trim(),
       city,
       state: stateUS,
       contactName: String(form.contactName || "").trim(),
@@ -783,6 +1004,8 @@ async function importCsvText(text){
     const payload = {
       churchName,
       website: String(row.website || "").trim(),
+      livestreamStatus: normalizeLivestreamStatus(row.has_livestream),
+      livestreamUrl: String(row.livestream_url || "").trim(),
       city,
       state: stateUS,
       contactName: String(row.contact_name || "").trim(),
@@ -845,5 +1068,7 @@ function initControls(){
 initControls();
 subscribeLeads();
 subscribeCalendar();
+subscribeActivities();
+subscribeKpiTargets();
 render();
 setTimeout(() => openTutorial(0), 250);

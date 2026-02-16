@@ -496,3 +496,32 @@ a{color:inherit}
   .calendar__cell{min-height:82px; padding:6px}
   .calendar__chip{font-size:11px; padding:4px 6px}
 }
+
+/* KPIs */
+.kpi-grid{grid-template-columns: repeat(2, minmax(280px,1fr)); align-items:start}
+.kpi-metrics{display:flex; flex-direction:column; gap:10px}
+.kpi-row{
+  border:1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  padding:9px 10px;
+  background: rgba(255,255,255,.03);
+}
+.kpi-row__top{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.kpi-row__label{font-weight:700; color:var(--text)}
+.kpi-row__value{font-size:12px; color:var(--muted)}
+.kpi-bar{
+  margin-top:8px;
+  height:8px;
+  border-radius:999px;
+  background: rgba(255,255,255,.08);
+  overflow:hidden;
+}
+.kpi-bar__fill{
+  height:100%;
+  border-radius:999px;
+  background: linear-gradient(90deg, rgba(106,166,255,.85), rgba(98,210,111,.9));
+}
+
+@media (max-width: 920px){
+  .kpi-grid{grid-template-columns: 1fr}
+}

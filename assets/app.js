@@ -43,6 +43,7 @@ const state = {
     Adrian: { ...KPI_DEFAULT_TARGETS.Adrian },
     Carmen: { ...KPI_DEFAULT_TARGETS.Carmen }
   },
+  duplicateOwnership: [],
   unsubscribe: null,
   unsubscribeCalendar: null,
   unsubscribeActivities: null,
@@ -210,6 +211,7 @@ const els = {
   newLeadBtn: document.getElementById("newLeadBtn"),
   searchInput: document.getElementById("searchInput"),
   stageFilter: document.getElementById("stageFilter"),
+  alertsRoot: document.getElementById("alertsRoot"),
   viewRoot: document.getElementById("viewRoot"),
   modal: document.getElementById("leadModal"),
   modalClose: document.getElementById("leadModalClose"),
@@ -225,6 +227,73 @@ const els = {
   tutorialSkip: document.getElementById("tutorialSkip"),
   tutorialNext: document.getElementById("tutorialNext")
 };
+
+function computeDuplicateOwnership(leads){
+  const byChurch = new Map();
+
+  for (const lead of leads){
+    const k = keyChurch(lead.churchName, lead.city, lead.state);
+    if (!k || k === "||") continue;
+
+    if (!byChurch.has(k)){
+      byChurch.set(k, {
+        churchName: lead.churchName || "Unnamed church",
+        city: lead.city || "",
+        state: lead.state || "",
+        owners: new Set(),
+        leadIds: []
+      });
+    }
+
+    const entry = byChurch.get(k);
+    if (lead.owner) entry.owners.add(lead.owner);
+    entry.leadIds.push(lead.id);
+  }
+
+  return [...byChurch.values()]
+    .filter(entry => entry.leadIds.length > 1 && entry.owners.size > 1)
+    .map(entry => ({
+      churchName: entry.churchName,
+      city: entry.city,
+      state: entry.state,
+      owners: [...entry.owners].sort(),
+      leadIds: entry.leadIds
+    }))
+    .sort((a, b) => String(a.churchName).localeCompare(String(b.churchName)));
+}
+
+function renderDuplicateAlerts(){
+  if (!els.alertsRoot) return;
+
+  const dups = state.duplicateOwnership;
+  if (!dups.length){
+    els.alertsRoot.innerHTML = "";
+    return;
+  }
+
+  const items = dups.slice(0, 8).map(d => {
+    const location = [d.city, d.state].filter(Boolean).join(", ");
+    return `
+      <div class="dup-alert__item">
+        <div><b>${d.churchName}</b>${location ? ` • ${location}` : ""}</div>
+        <div class="dup-alert__meta">Assigned to: ${d.owners.join(" + ")}</div>
+      </div>
+    `;
+  }).join("");
+
+  const more = dups.length > 8 ? `<div class="dup-alert__more">+${dups.length - 8} more duplicate assignment(s)</div>` : "";
+
+  els.alertsRoot.innerHTML = `
+    <div class="dup-alert panel">
+      <div class="h2" style="margin-bottom:8px; color:var(--danger);">Duplicate Church Ownership Detected (${dups.length})</div>
+      <div style="color:var(--muted); font-size:13px; margin-bottom:10px;">
+        These churches exist under both owner lists. Reassign or merge to avoid double outreach.
+      </div>
+      <div class="dup-alert__list">${items}</div>
+      ${more}
+    </div>
+  `;
+}
 
 function hasTutorialUi(){
   return !!(
@@ -339,6 +408,11 @@ function subscribeLeads(){
     }
     state.leads = leads;
     state.leadsById = new Map(leads.map(l => [l.id, l]));
+    const previousCount = state.duplicateOwnership.length;
+    state.duplicateOwnership = computeDuplicateOwnership(leads);
+    if (state.duplicateOwnership.length > previousCount){
+      toast("Duplicate ownership", `${state.duplicateOwnership.length} church duplicate(s) found across Adrian/Carmen.`);
+    }
     render();
   }, (err) => {
     console.error(err);
@@ -448,6 +522,7 @@ function subscribeKpiTargets(){
 
 function render(){
   applyTopControls();
+  renderDuplicateAlerts();
   const filtered = state.leads.filter(leadMatchesFilters);
 
   if (state.view === "pipeline"){
@@ -940,6 +1015,14 @@ async function createLeadFromForm(form){
     const stateUS = String(form.state || "").trim();
     if (!churchName || !city || !stateUS){
       toast("Missing required fields", "Church name, city, and state are required.");
+      return;
+    }
+
+    const requestedOwner = String(form.owner || "").trim();
+    const k = keyChurch(churchName, city, stateUS);
+    const conflicting = state.leads.find(l => keyChurch(l.churchName, l.city, l.state) === k && l.owner && requestedOwner && l.owner !== requestedOwner);
+    if (conflicting){
+      toast("Duplicate owner conflict", `${churchName} is already assigned to ${conflicting.owner}.`);
       return;
     }
 

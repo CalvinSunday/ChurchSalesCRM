@@ -19,7 +19,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 export const firebaseConfig = {
-  "apiKey": "AIzaSyDTC2r3pQT6EIC-3r_AH1BSRnoK5WEswTE",
+  "apiKey": "",
   "authDomain": "css-crm-183df.firebaseapp.com",
   "projectId": "css-crm-183df",
   "storageBucket": "css-crm-183df.firebasestorage.app",

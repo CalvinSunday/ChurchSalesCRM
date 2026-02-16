@@ -33,9 +33,88 @@ const state = {
   unsubscribe: null
 };
 
+const TUTORIAL_STEPS = [
+  {
+    title: "Welcome to Church Sales CRM",
+    view: "pipeline",
+    bullets: [
+      "This quick walkthrough covers every main workflow in the app.",
+      "Use the tabs to switch between Pipeline, Follow-ups, Import/Export, and Settings.",
+      "Use the Tutorial button in the top bar any time to replay this guide."
+    ]
+  },
+  {
+    title: "Pipeline and Filters",
+    view: "pipeline",
+    bullets: [
+      "Pipeline shows leads grouped by sales stage.",
+      "Use owner quick filters, search, and stage filter to narrow your list instantly.",
+      "Click any lead card to open full details and activity history."
+    ]
+  },
+  {
+    title: "Creating and Updating Leads",
+    view: "pipeline",
+    bullets: [
+      "Use + New Lead to create a lead with church, contact, owner, and stage details.",
+      "Inside a lead modal you can update stage, next follow-up, notes, tier interest, and budget.",
+      "Marking a deposit as paid automatically moves the lead to Closed Won."
+    ]
+  },
+  {
+    title: "Activity Logging and Follow-up Rules",
+    view: "pipeline",
+    bullets: [
+      "Log calls, emails, meetings, and other activities from each lead modal.",
+      "Recent activity appears in the lead timeline for quick context.",
+      "Some activity types automatically schedule a next follow-up date."
+    ]
+  },
+  {
+    title: "Follow-ups View",
+    view: "followups",
+    bullets: [
+      "Follow-ups focuses on your current owner profile.",
+      "See overdue and due-today leads at the top, plus all upcoming follow-ups below.",
+      "Click any card to jump into the lead and take action."
+    ]
+  },
+  {
+    title: "Import / Export",
+    view: "importexport",
+    bullets: [
+      "Import CSV creates leads in bulk using the expected header format.",
+      "Duplicate church/city/state combinations are skipped to avoid double entries.",
+      "Export CSV downloads your full lead list for backup or sharing."
+    ]
+  },
+  {
+    title: "Settings and Local Preferences",
+    view: "settings",
+    bullets: [
+      "Set your default owner profile for this browser.",
+      "Reset local settings if filters or defaults need a clean start.",
+      "These settings are local to your device and do not create user accounts."
+    ]
+  },
+  {
+    title: "You’re Ready",
+    view: "pipeline",
+    bullets: [
+      "Core workflow: add leads, log activity, schedule follow-ups, and move deals to Closed Won.",
+      "Use the top-bar filters daily to keep your list focused.",
+      "Replay this tutorial any time from the Tutorial button."
+    ]
+  }
+];
+
+let tutorialStepIndex = 0;
+let tutorialStartingView = null;
+
 const els = {
   tabs: Array.from(document.querySelectorAll(".tabs__tab")),
   ownerQuickFilter: document.getElementById("ownerQuickFilter"),
+  tutorialBtn: document.getElementById("tutorialBtn"),
   newLeadBtn: document.getElementById("newLeadBtn"),
   searchInput: document.getElementById("searchInput"),
   stageFilter: document.getElementById("stageFilter"),
@@ -44,7 +123,15 @@ const els = {
   modalClose: document.getElementById("leadModalClose"),
   modalBody: document.getElementById("leadModalBody"),
   modalTitle: document.getElementById("leadModalTitle"),
-  modalMeta: document.getElementById("leadModalMeta")
+  modalMeta: document.getElementById("leadModalMeta"),
+  tutorialModal: document.getElementById("tutorialModal"),
+  tutorialClose: document.getElementById("tutorialClose"),
+  tutorialStepMeta: document.getElementById("tutorialStepMeta"),
+  tutorialStepTitle: document.getElementById("tutorialStepTitle"),
+  tutorialStepBody: document.getElementById("tutorialStepBody"),
+  tutorialPrev: document.getElementById("tutorialPrev"),
+  tutorialSkip: document.getElementById("tutorialSkip"),
+  tutorialNext: document.getElementById("tutorialNext")
 };
 
 function applyTopControls(){
@@ -59,9 +146,9 @@ function applyTopControls(){
   els.stageFilter.value = state.stageFilter;
 }
 
-function setView(view){
+function setView(view, { persist=true } = {}){
   state.view = view;
-  setLocal(LS.view, view);
+  if (persist) setLocal(LS.view, view);
   render();
 }
 
@@ -221,6 +308,71 @@ function closeModal(){
 els.modalClose.addEventListener("click", closeModal);
 els.modal.addEventListener("click", (e) => {
   if (e.target?.dataset?.close === "true") closeModal();
+});
+
+function renderTutorialStep(){
+  const step = TUTORIAL_STEPS[tutorialStepIndex];
+  if (!step) return;
+
+  if (step.view && state.view !== step.view){
+    setView(step.view, { persist: false });
+  }
+
+  els.tutorialStepTitle.textContent = step.title;
+  els.tutorialStepMeta.textContent = `Step ${tutorialStepIndex + 1} of ${TUTORIAL_STEPS.length}`;
+
+  els.tutorialStepBody.innerHTML = "";
+  const list = document.createElement("ul");
+  step.bullets.forEach((text) => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    list.appendChild(item);
+  });
+  els.tutorialStepBody.appendChild(list);
+
+  els.tutorialPrev.disabled = tutorialStepIndex === 0;
+  els.tutorialNext.textContent = tutorialStepIndex === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next";
+}
+
+function openTutorial(startAt=0){
+  tutorialStartingView = state.view;
+  tutorialStepIndex = Math.max(0, Math.min(startAt, TUTORIAL_STEPS.length - 1));
+  els.tutorialModal.classList.add("is-open");
+  els.tutorialModal.setAttribute("aria-hidden", "false");
+  renderTutorialStep();
+}
+
+function closeTutorial(){
+  els.tutorialModal.classList.remove("is-open");
+  els.tutorialModal.setAttribute("aria-hidden", "true");
+
+  if (tutorialStartingView && state.view !== tutorialStartingView){
+    setView(tutorialStartingView, { persist: false });
+  }
+  tutorialStartingView = null;
+}
+
+els.tutorialClose.addEventListener("click", closeTutorial);
+els.tutorialSkip.addEventListener("click", closeTutorial);
+els.tutorialModal.addEventListener("click", (e) => {
+  if (e.target?.dataset?.close === "true") closeTutorial();
+});
+
+els.tutorialPrev.addEventListener("click", () => {
+  if (tutorialStepIndex <= 0) return;
+  tutorialStepIndex--;
+  renderTutorialStep();
+});
+
+els.tutorialNext.addEventListener("click", () => {
+  const isLast = tutorialStepIndex >= TUTORIAL_STEPS.length - 1;
+  if (isLast){
+    closeTutorial();
+    toast("Tutorial complete", "You can replay it from the Tutorial button.");
+    return;
+  }
+  tutorialStepIndex++;
+  renderTutorialStep();
 });
 
 async function openLeadModal(leadId){
@@ -520,8 +672,12 @@ function initControls(){
 
   // New lead
   els.newLeadBtn.addEventListener("click", () => setView("newlead"));
+
+  // Tutorial
+  els.tutorialBtn.addEventListener("click", () => openTutorial(0));
 }
 
 initControls();
 subscribeLeads();
 render();
+setTimeout(() => openTutorial(0), 250);

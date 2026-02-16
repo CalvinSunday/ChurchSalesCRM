@@ -1,6 +1,6 @@
 import { db, f } from "./firebase.js";
 import { STAGES, REMINDER_RULES, CSV_HEADER } from "./constants.js";
-import { fillStageFilter, renderPipeline, renderFollowups, renderImportExport, renderSettings, renderNewLeadForm, renderLeadModal, toast } from "./ui.js";
+import { fillStageFilter, renderPipeline, renderFollowups, renderCalendar, renderImportExport, renderSettings, renderNewLeadForm, renderLeadModal, toast } from "./ui.js";
 import { parseCsv, validateHeader, leadsToCsv, downloadText } from "./csv.js";
 import { parseUSDateToDate, addDays, now, keyChurch, moneyToNumber } from "./utils.js";
 
@@ -9,7 +9,8 @@ const LS = {
   quickOwner: "crm:quickOwner",
   view: "crm:view",
   stageFilter: "crm:stageFilter",
-  search: "crm:search"
+  search: "crm:search",
+  calendarMonth: "crm:calendarMonth"
 };
 
 function getLocal(key, fallback=null){
@@ -28,9 +29,13 @@ const state = {
   quickOwner: getLocal(LS.quickOwner, "ALL"),
   stageFilter: getLocal(LS.stageFilter, "ALL"),
   search: getLocal(LS.search, ""),
+  calendarMonth: getLocal(LS.calendarMonth, new Date().toISOString().slice(0,7)),
   leads: [],
   leadsById: new Map(),
-  unsubscribe: null
+  calendarEntries: [],
+  calendarById: new Map(),
+  unsubscribe: null,
+  unsubscribeCalendar: null
 };
 
 const TUTORIAL_STEPS = [
@@ -39,7 +44,7 @@ const TUTORIAL_STEPS = [
     view: "pipeline",
     bullets: [
       "This quick walkthrough covers every main workflow in the app.",
-      "Use the tabs to switch between Pipeline, Follow-ups, Import/Export, and Settings.",
+      "Use the tabs to switch between Pipeline, Follow-ups, Calendar, Import/Export, and Settings.",
       "Use the Tutorial button in the top bar any time to replay this guide."
     ]
   },
@@ -77,6 +82,15 @@ const TUTORIAL_STEPS = [
       "Follow-ups focuses on your current owner profile.",
       "See overdue and due-today leads at the top, plus all upcoming follow-ups below.",
       "Click any card to jump into the lead and take action."
+    ]
+  },
+  {
+    title: "Master Calendar",
+    view: "calendar",
+    bullets: [
+      "Calendar is a shared live view across all users.",
+      "Add availability only for Closed Won clients so the whole team sees scheduling status.",
+      "Use month navigation to plan upcoming client availability and booking load."
     ]
   },
   {
@@ -245,6 +259,42 @@ function subscribeLeads(){
   });
 }
 
+function parseCalendarDoc(docSnap){
+  const data = docSnap.data() || {};
+  const toDate = (ts) => ts && typeof ts.toDate === "function" ? ts.toDate() : null;
+  return {
+    id: docSnap.id,
+    leadId: data.leadId || "",
+    churchName: data.churchName || "",
+    owner: data.owner || "",
+    availabilityType: data.availabilityType || "Available",
+    notes: data.notes || "",
+    startsOn: toDate(data.startsOn),
+    createdBy: data.createdBy || "",
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt)
+  };
+}
+
+function subscribeCalendar(){
+  if (state.unsubscribeCalendar) state.unsubscribeCalendar();
+
+  const col = f.collection(db, "calendarAvailability");
+  const q = f.query(col, f.orderBy("startsOn", "asc"));
+  state.unsubscribeCalendar = f.onSnapshot(q, (snap) => {
+    const entries = [];
+    for (const d of snap.docs){
+      entries.push(parseCalendarDoc(d));
+    }
+    state.calendarEntries = entries;
+    state.calendarById = new Map(entries.map(e => [e.id, e]));
+    if (state.view === "calendar") render();
+  }, (err) => {
+    console.error(err);
+    toast("Calendar error", err?.message || String(err));
+  });
+}
+
 function render(){
   applyTopControls();
   const filtered = state.leads.filter(leadMatchesFilters);
@@ -263,6 +313,26 @@ function render(){
       root: els.viewRoot,
       leads: filtered,
       currentUserOwner: state.userOwner,
+      onOpenLead: openLeadModal
+    });
+    return;
+  }
+
+  if (state.view === "calendar"){
+    const closedWonLeads = state.leads
+      .filter(l => l.stage === "Closed Won")
+      .sort((a, b) => String(a.churchName || "").localeCompare(String(b.churchName || "")));
+
+    renderCalendar({
+      root: els.viewRoot,
+      monthKey: state.calendarMonth,
+      entries: state.calendarEntries,
+      closedWonLeads,
+      onPrevMonth: () => shiftCalendarMonth(-1),
+      onNextMonth: () => shiftCalendarMonth(1),
+      onJumpToCurrentMonth: () => setCalendarMonth(new Date().toISOString().slice(0,7)),
+      onCreateEntry: createCalendarEntry,
+      onDeleteEntry: deleteCalendarEntry,
       onOpenLead: openLeadModal
     });
     return;
@@ -307,6 +377,80 @@ function render(){
   }
 
   els.viewRoot.innerHTML = `<div class="panel">Unknown view.</div>`;
+}
+
+function shiftCalendarMonth(delta){
+  const [y, m] = String(state.calendarMonth || "").split("-").map(Number);
+  const d = Number.isFinite(y) && Number.isFinite(m) ? new Date(y, m - 1, 1) : new Date();
+  d.setMonth(d.getMonth() + delta);
+  setCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+}
+
+function setCalendarMonth(monthKey){
+  if (!/^\d{4}-\d{2}$/.test(String(monthKey || ""))) return;
+  state.calendarMonth = monthKey;
+  setLocal(LS.calendarMonth, monthKey);
+  render();
+}
+
+async function createCalendarEntry(form){
+  try{
+    const leadId = String(form.leadId || "").trim();
+    const date = String(form.date || "").trim();
+    const availabilityType = String(form.availabilityType || "Available").trim() || "Available";
+    const notes = String(form.notes || "").trim();
+
+    if (!leadId || !date){
+      toast("Missing fields", "Choose a closed client and a date.");
+      return;
+    }
+
+    const lead = state.leadsById.get(leadId);
+    if (!lead || lead.stage !== "Closed Won"){
+      toast("Invalid client", "Availability can only be added for Closed Won clients.");
+      return;
+    }
+
+    const startsOn = new Date(`${date}T12:00:00`);
+    if (Number.isNaN(startsOn.getTime())){
+      toast("Invalid date", "Please choose a valid date.");
+      return;
+    }
+
+    await f.addDoc(f.collection(db, "calendarAvailability"), {
+      leadId,
+      churchName: lead.churchName || "",
+      owner: lead.owner || "",
+      availabilityType,
+      notes,
+      startsOn: f.Timestamp.fromDate(startsOn),
+      createdBy: state.userOwner,
+      createdAt: f.serverTimestamp(),
+      updatedAt: f.serverTimestamp()
+    });
+
+    setCalendarMonth(date.slice(0, 7));
+    toast("Saved", "Availability added to master calendar.");
+  }catch(err){
+    console.error(err);
+    toast("Save failed", err?.message || String(err));
+  }
+}
+
+async function deleteCalendarEntry(entryId){
+  const entry = state.calendarById.get(entryId);
+  if (!entry) return;
+
+  const ok = confirm(`Delete availability for ${entry.churchName || "this client"}?`);
+  if (!ok) return;
+
+  try{
+    await f.deleteDoc(f.doc(db, "calendarAvailability", entryId));
+    toast("Deleted", "Availability removed.");
+  }catch(err){
+    console.error(err);
+    toast("Delete failed", err?.message || String(err));
+  }
 }
 
 function openModal(){
@@ -700,5 +844,6 @@ function initControls(){
 
 initControls();
 subscribeLeads();
+subscribeCalendar();
 render();
 setTimeout(() => openTutorial(0), 250);

@@ -91,6 +91,184 @@ export function renderFollowups({ root, leads, currentUserOwner, onOpenLead }){
   });
 }
 
+export function renderCalendar({
+  root,
+  monthKey,
+  entries,
+  closedWonLeads,
+  onPrevMonth,
+  onNextMonth,
+  onJumpToCurrentMonth,
+  onCreateEntry,
+  onDeleteEntry,
+  onOpenLead
+}){
+  const [yearRaw, monthRaw] = String(monthKey || "").split("-").map(Number);
+  const monthDate = Number.isFinite(yearRaw) && Number.isFinite(monthRaw)
+    ? new Date(yearRaw, monthRaw - 1, 1)
+    : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthLabel = monthDate.toLocaleString(undefined, { month: "long", year: "numeric" });
+
+  const entriesInMonth = entries
+    .filter(e => e.startsOn && e.startsOn.getFullYear() === year && e.startsOn.getMonth() === month)
+    .sort((a, b) => a.startsOn.getTime() - b.startsOn.getTime() || String(a.churchName || "").localeCompare(String(b.churchName || "")));
+
+  const byDay = new Map();
+  for (const e of entriesInMonth){
+    const day = e.startsOn.getDate();
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(e);
+  }
+
+  const dayHeaders = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
+    .map(d => `<div class="calendar__dow">${d}</div>`).join("");
+
+  const cells = [];
+  for (let i = 0; i < firstDow; i++){
+    cells.push(`<div class="calendar__cell calendar__cell--empty"></div>`);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++){
+    const dayEntries = byDay.get(day) || [];
+    const chips = dayEntries.slice(0, 3).map(e => `
+      <button class="calendar__chip" type="button" data-open-lead="${escapeHtml(e.leadId || "")}" title="${escapeHtml(`${e.churchName || "Client"} • ${e.availabilityType || "Available"}`)}">
+        ${escapeHtml(e.churchName || "Client")}
+      </button>
+    `).join("");
+    const overflow = dayEntries.length > 3 ? `<div class="calendar__more">+${dayEntries.length - 3} more</div>` : "";
+    cells.push(`
+      <div class="calendar__cell">
+        <div class="calendar__day">${day}</div>
+        <div class="calendar__events">
+          ${chips || `<div class="calendar__none">No entries</div>`}
+          ${overflow}
+        </div>
+      </div>
+    `);
+  }
+
+  while (cells.length % 7 !== 0){
+    cells.push(`<div class="calendar__cell calendar__cell--empty"></div>`);
+  }
+
+  const defaultDate = monthDate.getTime() === new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime()
+    ? toDateInputValue(new Date())
+    : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+  root.innerHTML = `
+    <div class="grid calendar-layout" style="align-items:start;">
+      <div class="panel">
+        <div class="row" style="margin-bottom:10px;">
+          <div class="row__left">
+            <div class="h2" style="margin:0;">Master Availability Calendar</div>
+            <div style="color:var(--muted); font-size:13px;">Shared live across all users</div>
+          </div>
+          <div class="row__right">
+            <button class="btn" id="calendarPrevBtn" type="button">←</button>
+            <div class="calendar__month">${escapeHtml(monthLabel)}</div>
+            <button class="btn" id="calendarNextBtn" type="button">→</button>
+            <button class="btn" id="calendarTodayBtn" type="button">Today</button>
+          </div>
+        </div>
+
+        <div class="calendar">
+          <div class="calendar__head">${dayHeaders}</div>
+          <div class="calendar__grid">${cells.join("")}</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="h2">Add Availability (Closed Clients)</div>
+        <form id="calendarForm" class="form" style="grid-template-columns: 1fr;">
+          <div class="field">
+            <label>Client (Closed Won) *</label>
+            <select name="leadId" required ${closedWonLeads.length ? "" : "disabled"}>
+              ${closedWonLeads.length
+                ? closedWonLeads.map(l => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.churchName || "Unnamed")} (${escapeHtml(l.city || "")}${l.city && l.state ? ", " : ""}${escapeHtml(l.state || "")})</option>`).join("")
+                : `<option value="">No Closed Won clients available</option>`}
+            </select>
+          </div>
+          <div class="field">
+            <label>Date *</label>
+            <input name="date" type="date" value="${escapeHtml(defaultDate)}" required />
+          </div>
+          <div class="field">
+            <label>Availability</label>
+            <select name="availabilityType">
+              <option value="Available">Available</option>
+              <option value="Booked">Booked</option>
+              <option value="Unavailable">Unavailable</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <textarea name="notes" placeholder="Install date confirmed, team unavailable, etc."></textarea>
+          </div>
+          <div class="field">
+            <button class="btn btn--primary" type="submit" ${closedWonLeads.length ? "" : "disabled"}>Save availability</button>
+          </div>
+        </form>
+
+        <div style="height:12px;"></div>
+        <div class="h2">Entries This Month (${entriesInMonth.length})</div>
+        <div class="calendar-list">
+          ${entriesInMonth.length
+            ? entriesInMonth.map(e => `
+              <div class="calendar-item">
+                <div>
+                  <div class="calendar-item__title">${escapeHtml(e.churchName || "Client")}</div>
+                  <div class="calendar-item__meta">
+                    ${escapeHtml(formatUSDate(e.startsOn))} • <span class="calendar-badge ${calendarTypeClass(e.availabilityType)}">${escapeHtml(e.availabilityType || "Available")}</span>
+                  </div>
+                  ${e.notes ? `<div class="calendar-item__notes">${escapeHtml(e.notes)}</div>` : ""}
+                </div>
+                <div class="row__right">
+                  <button class="btn" type="button" data-open-lead="${escapeHtml(e.leadId || "")}">Lead</button>
+                  <button class="btn btn--danger" type="button" data-delete-calendar="${escapeHtml(e.id)}">Delete</button>
+                </div>
+              </div>
+            `).join("")
+            : `<div style="color:var(--muted); font-size:13px;">No availability entries for this month.</div>`}
+        </div>
+      </div>
+    </div>
+  `;
+
+  root.querySelector("#calendarPrevBtn").addEventListener("click", onPrevMonth);
+  root.querySelector("#calendarNextBtn").addEventListener("click", onNextMonth);
+  root.querySelector("#calendarTodayBtn").addEventListener("click", onJumpToCurrentMonth);
+
+  root.querySelector("#calendarForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const payload = Object.fromEntries(form.entries());
+    await onCreateEntry(payload);
+    const notesEl = e.currentTarget.querySelector("textarea[name='notes']");
+    if (notesEl) notesEl.value = "";
+  });
+
+  root.querySelectorAll("[data-open-lead]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const leadId = e.currentTarget.getAttribute("data-open-lead");
+      if (!leadId) return;
+      onOpenLead(leadId);
+    });
+  });
+
+  root.querySelectorAll("[data-delete-calendar]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const id = e.currentTarget.getAttribute("data-delete-calendar");
+      if (!id) return;
+      onDeleteEntry(id);
+    });
+  });
+}
+
 export function renderImportExport({ root, onImportCsv, onExportCsv }){
   root.innerHTML = `
     <div class="panel">
@@ -443,6 +621,13 @@ function sortByFollowupThenName(a,b){
 
 function isSameDay(a,b){
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+
+function calendarTypeClass(type){
+  const t = String(type || "").toLowerCase();
+  if (t === "booked") return "calendar-badge--booked";
+  if (t === "unavailable") return "calendar-badge--unavailable";
+  return "calendar-badge--available";
 }
 
 export function renderCard(lead, opts={}){

@@ -409,3 +409,90 @@ a{color:inherit}
 }
 .toast__msg{font-weight:700}
 .toast__sub{font-size:12px; color: var(--muted); margin-top:2px}
+
+/* Calendar */
+.calendar-layout{grid-template-columns: minmax(0,1.7fr) minmax(340px,1fr)}
+.calendar{display:flex; flex-direction:column; gap:8px}
+.calendar__head,
+.calendar__grid{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap:8px;
+}
+.calendar__dow{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+  text-transform:uppercase;
+  text-align:center;
+  padding:4px 0;
+}
+.calendar__cell{
+  min-height:112px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  padding:8px;
+  background: rgba(255,255,255,.03);
+}
+.calendar__cell--empty{
+  background: rgba(255,255,255,.015);
+  border-color: rgba(255,255,255,.05);
+}
+.calendar__day{font-weight:900; font-size:13px; margin-bottom:8px}
+.calendar__events{display:flex; flex-direction:column; gap:6px}
+.calendar__chip{
+  width:100%;
+  text-align:left;
+  border:1px solid rgba(106,166,255,.25);
+  color:var(--text);
+  background: rgba(106,166,255,.12);
+  border-radius: 8px;
+  padding:5px 7px;
+  font-size:12px;
+  cursor:pointer;
+}
+.calendar__chip:hover{background: rgba(106,166,255,.18)}
+.calendar__none{font-size:12px; color:var(--muted)}
+.calendar__more{font-size:11px; color:var(--muted)}
+.calendar__month{
+  min-width: 170px;
+  text-align:center;
+  font-weight:800;
+  color:var(--text);
+}
+
+.calendar-list{display:flex; flex-direction:column; gap:10px}
+.calendar-item{
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 12px;
+  padding:10px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.calendar-item__title{font-weight:800}
+.calendar-item__meta{font-size:12px; color:var(--muted); margin-top:3px}
+.calendar-item__notes{font-size:13px; color:var(--text); margin-top:6px; white-space:pre-wrap}
+.calendar-badge{
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:999px;
+  padding:2px 8px;
+  font-size:11px;
+  font-weight:800;
+}
+.calendar-badge--available{border-color: rgba(98,210,111,.35); color: var(--good)}
+.calendar-badge--booked{border-color: rgba(106,166,255,.35); color: var(--primary)}
+.calendar-badge--unavailable{border-color: rgba(255,106,106,.35); color: var(--danger)}
+
+@media (max-width: 1060px){
+  .calendar-layout{grid-template-columns: 1fr}
+  .calendar__cell{min-height:96px}
+}
+@media (max-width: 860px){
+  .calendar__head,
+  .calendar__grid{gap:6px}
+  .calendar__cell{min-height:82px; padding:6px}
+  .calendar__chip{font-size:11px; padding:4px 6px}
+}

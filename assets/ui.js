@@ -421,6 +421,23 @@ export function renderImportExport({ root, onImportCsv, onExportCsv, onDownloadP
       <div id="importStatus" style="margin-top:10px; color:var(--muted); font-size:13px;"></div>
 
       <div style="height:16px;"></div>
+      <div class="panel" style="background: rgba(255,255,255,.02); border-style:dashed;">
+        <div class="row">
+          <div class="row__left">
+            <div>
+              <div class="h2" style="margin-bottom:6px;">Lead Gen Prompt</div>
+              <div style="color:var(--muted); font-size:13px;">
+                Download the ChatGPT prompt template your reps can use to generate import-ready CSV files.
+              </div>
+            </div>
+          </div>
+          <div class="row__right">
+            <button class="btn btn--primary" id="downloadPromptBtnInline" type="button">Download Prompt (.md)</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:16px;"></div>
       <div style="color:var(--muted); font-size:13px;">
         Tip: Use <code>data/sample-import.csv</code> as a template.
       </div>
@@ -428,6 +445,7 @@ export function renderImportExport({ root, onImportCsv, onExportCsv, onDownloadP
   `;
 
   root.querySelector("#downloadPromptBtn").addEventListener("click", onDownloadPrompt);
+  root.querySelector("#downloadPromptBtnInline").addEventListener("click", onDownloadPrompt);
   root.querySelector("#exportBtn").addEventListener("click", onExportCsv);
 
   const fileEl = root.querySelector("#csvFile");

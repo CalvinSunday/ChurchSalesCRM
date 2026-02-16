@@ -510,7 +510,7 @@ function render(){
       root: els.viewRoot,
       onImportCsv: importCsvText,
       onExportCsv: exportCsv,
-      onDownloadPrompt: downloadLeadGenPrompt
+      onCopyPrompt: copyLeadGenPrompt
     });
     return;
   }
@@ -1042,16 +1042,33 @@ function exportCsv(){
   downloadText(`church-sales-crm-export-${new Date().toISOString().slice(0,10)}.csv`, csv);
 }
 
-async function downloadLeadGenPrompt(){
+async function copyLeadGenPrompt(){
   try{
     const res = await fetch("./docs/chatgpt-lead-gen-prompt.md", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
-    downloadText("chatgpt-lead-gen-prompt.md", text);
-    toast("Downloaded", "Lead generation prompt saved.");
+
+    if (navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(text);
+      toast("Copied", "Lead generation prompt copied to clipboard.");
+      return;
+    }
+
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "true");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+
+    if (!ok) throw new Error("Clipboard copy failed");
+    toast("Copied", "Lead generation prompt copied to clipboard.");
   }catch(err){
     console.error(err);
-    toast("Download failed", "Could not fetch docs/chatgpt-lead-gen-prompt.md");
+    toast("Copy failed", "Could not copy prompt. Open docs/chatgpt-lead-gen-prompt.md manually.");
   }
 }
 

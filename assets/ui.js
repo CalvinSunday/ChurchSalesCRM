@@ -392,7 +392,7 @@ function cssEscape(s){
   return String(s).replaceAll("'", "\\'");
 }
 
-export function renderImportExport({ root, onImportCsv, onExportCsv, onDownloadPrompt }){
+export function renderImportExport({ root, onImportCsv, onExportCsv, onCopyPrompt }){
   root.innerHTML = `
     <div class="panel">
       <div class="row">
@@ -405,7 +405,7 @@ export function renderImportExport({ root, onImportCsv, onExportCsv, onDownloadP
           </div>
         </div>
         <div class="row__right">
-          <button class="btn" id="downloadPromptBtn" type="button">Download Lead Prompt</button>
+          <button class="btn" id="copyPromptBtn" type="button">Copy Lead Prompt</button>
           <button class="btn" id="exportBtn" type="button">Export CSV</button>
         </div>
       </div>
@@ -427,12 +427,12 @@ export function renderImportExport({ root, onImportCsv, onExportCsv, onDownloadP
             <div>
               <div class="h2" style="margin-bottom:6px;">Lead Gen Prompt</div>
               <div style="color:var(--muted); font-size:13px;">
-                Download the ChatGPT prompt template your reps can use to generate import-ready CSV files.
+                Copy the ChatGPT prompt template your reps can use to generate import-ready CSV files.
               </div>
             </div>
           </div>
           <div class="row__right">
-            <button class="btn btn--primary" id="downloadPromptBtnInline" type="button">Download Prompt (.md)</button>
+            <button class="btn btn--primary" id="copyPromptBtnInline" type="button">Copy Prompt</button>
           </div>
         </div>
       </div>
@@ -444,8 +444,8 @@ export function renderImportExport({ root, onImportCsv, onExportCsv, onDownloadP
     </div>
   `;
 
-  root.querySelector("#downloadPromptBtn").addEventListener("click", onDownloadPrompt);
-  root.querySelector("#downloadPromptBtnInline").addEventListener("click", onDownloadPrompt);
+  root.querySelector("#copyPromptBtn").addEventListener("click", onCopyPrompt);
+  root.querySelector("#copyPromptBtnInline").addEventListener("click", onCopyPrompt);
   root.querySelector("#exportBtn").addEventListener("click", onExportCsv);
 
   const fileEl = root.querySelector("#csvFile");

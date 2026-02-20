@@ -2,7 +2,7 @@ import { db, f } from "./firebase.js";
 import { STAGES, REMINDER_RULES, CSV_HEADER, KPI_DEFAULT_TARGETS, KPI_ACTIVITY_TO_METRIC } from "./constants.js";
 import { fillStageFilter, renderPipeline, renderFollowups, renderCalendar, renderKpis, renderTalkTrack, renderImportExport, renderSettings, renderNewLeadForm, renderLeadModal, toast } from "./ui.js";
 import { parseCsv, validateHeader, leadsToCsv, downloadText } from "./csv.js";
-import { parseUSDateToDate, addDays, now, keyChurch, moneyToNumber } from "./utils.js";
+import { parseUSDateToDate, addDays, now, keyChurch, moneyToNumber, escapeHtml } from "./utils.js";
 
 const LS = {
   userOwner: "crm:userOwner",
@@ -275,8 +275,8 @@ function renderDuplicateAlerts(){
     const location = [d.city, d.state].filter(Boolean).join(", ");
     return `
       <div class="dup-alert__item">
-        <div><b>${d.churchName}</b>${location ? ` • ${location}` : ""}</div>
-        <div class="dup-alert__meta">Assigned to: ${d.owners.join(" + ")}</div>
+        <div><b>${escapeHtml(d.churchName)}</b>${location ? ` • ${escapeHtml(location)}` : ""}</div>
+        <div class="dup-alert__meta">Assigned to: ${d.owners.map(escapeHtml).join(" + ")}</div>
       </div>
     `;
   }).join("");

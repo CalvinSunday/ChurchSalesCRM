@@ -9,6 +9,30 @@ A simple, clean CRM for church AV/livestream outreach.
 - CSV import/export with dedupe (church name + city + state; skips duplicates)
 - Closed Won = **Deposit Paid** (tracks amount + date)
 
+## ⚠️ CRITICAL Security Warning
+
+**This application has OPEN database access with NO authentication.**
+
+### What this means:
+- ❌ **Anyone who discovers your application URL can read ALL your CRM data**
+- ❌ **Anyone can modify or delete your data without permission**
+- ❌ **There is no access control or user authentication**
+
+### Immediate Actions Required:
+1. 🔒 **Keep your application URL secret** - Do not share publicly
+2. 📊 **Monitor your Firestore usage** in Firebase Console for suspicious activity
+3. 💾 **Set up regular backups** of your Firestore data
+4. 🔐 **Plan to implement authentication** - See `SECURITY.md` for detailed recommendations
+
+### For Production Use:
+This setup is **NOT RECOMMENDED for production** with sensitive data. See `SECURITY.md` for:
+- How to implement Firebase Authentication
+- How to secure Firestore rules
+- Additional security best practices
+- Complete security audit findings
+
+---
+
 ## Important security note
 You requested **no logins** and **open rules**. This means:
 - Anyone who can access the site can read/write your Firestore data.

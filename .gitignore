@@ -9,3 +9,25 @@ node_modules/
 
 # Local data
 *.log
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# Local exports/backups (potentially sensitive)
+*.csv
+!data/sample-import.csv
+exports/
+backups/
+tmp/
+
+# Firebase/Supabase local tooling artifacts
+.firebase/
+firebase-debug.log
+.supabase/
+
+# Misc
+*.sqlite
+*.db
+*.bak
